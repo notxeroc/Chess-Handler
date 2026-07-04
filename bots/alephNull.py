@@ -335,6 +335,8 @@ class Bot(ChessBotBase.Bot):
         score = 0
 
         ################### SETUP ###################
+
+        epsilon = 1e-3
         
         if board.is_checkmate():
             if board.turn == self.color:

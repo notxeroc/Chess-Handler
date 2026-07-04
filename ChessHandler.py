@@ -10,6 +10,7 @@ import bots.escanor as Escanor
 import bots.shallowTeal as ShallowTeal
 import bots.kamikazeGambiterBot as KamikazeGambiterBot
 import bots.alephNull as AlephNull
+import bots.ThreeCheckBot as ThreeCheck
 
 PLAYER = "human"
 
@@ -22,6 +23,10 @@ gui.piece_set = "classic"
 gui.move_time = 100
 
 gui.load_images()
+# gui.special["variant"] = "3check"
+# gui.load_variant()
+
+
 gui.run()
 
 pgn = chess.pgn.Game.from_board(gui.board)
