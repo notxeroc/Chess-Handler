@@ -4,8 +4,9 @@ import random
 import math
 
 class Bot(Bot):
-    def name(self):
-        return "Escanor, The Lion's Sin of Pride"
+    def setup(self):
+        self.name = "Escanor, The Lion's Sin of Pride"
+        
     def count_captures_on_moved_piece(self, board):
               move = board.peek()
               moved_to = move.to_square

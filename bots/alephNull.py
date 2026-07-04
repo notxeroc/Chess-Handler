@@ -3,6 +3,7 @@ import random
 import base.ChessBotBase as ChessBotBase
 import math
 
+EPSILON = 1e-30
 
 #[Base, Beginning, Middle, End]
 
@@ -21,23 +22,24 @@ ROOK_DEVELOPMENT_MOD = [0, -2, 2, 7]
 QUEEN = [11, 0, -2, 1]
 QUEEN_DEVELOPMENT_MOD = [0, -10, 2, 9]
 
-SIMPLIFICATION_MOD = [0, 0, 0, 0]
+SIMPLIFICATION_MOD = [0, 0, 0.1, 0.4]
+LOSING_SIMPLIFICATION_MOD = [-0.5, 0, 0, 0]
 
 
 MATERIAL_MOD = [1, 0.5, -0.2, 3]
 OP_MATERIAL_MOD = [-1.05, -0.5, 0.2, 0]
 
-DEVELOP_MOD = [0.75, 0, 0, 0]
-OP_DEVELOP_MOD = [0.70, 0, 0, 0]
+DEVELOP_MOD = [0.175, 0, 0, 0]
+OP_DEVELOP_MOD = [0.15, 0, 0, 0]
 
-COVERAGE_MOD = [0.0025, 0, 0, 0]
-OP_COVERAGE_MOD = [-0.003, 0, 0, 0]
+COVERAGE_MOD = [0.00025, 0, 0, 0]
+OP_COVERAGE_MOD = [-0.0003, 0, 0, 0]
 
-ATTACKED_MOD = [-0.1, 0, 0, 0]
-OP_ATTACKED_MOD = [0.1, 0, 0, 0]
+ATTACKED_MOD = [-0.01, 0, 0, 0]
+OP_ATTACKED_MOD = [0.01, 0, 0, 0]
 
-DEFENDED_MOD = [0.1, 0, 0, 0]
-OP_DEFENDED_MOD = [-0.1, 0, 0, 0]
+DEFENDED_MOD = [0.01, 0, 0, 0]
+OP_DEFENDED_MOD = [-0.01, 0, 0, 0]
 
 
 TEMPO_MOD = [1, 0.15, 0.05, 0.10]
@@ -187,8 +189,8 @@ KING_TABLE = [EMPTY, [
       0,   0, -20,   0,   0, -20,   0,   0,  # rank 8
 ] ]
 
-PST_MOD = [0.06, 0.15, -0.02, -0.03]
-OP_PST_MOD = [-0.03, -0.1, 0.1, 0.02]
+PST_MOD = [0.0004, 0.0003, -0.0002, -0.0003]
+OP_PST_MOD = [-0.0003, -0.0003, 0.0001, 0.0002]
 
 def bound(x):
     return max(min(x,1),0)
@@ -197,11 +199,9 @@ class Bot(ChessBotBase.Bot):
     pieces = []
     values = {chess.PAWN: PAWN, chess.KNIGHT: KNIGHT, chess.BISHOP: BISHOP, chess.ROOK: ROOK, chess.QUEEN: QUEEN}
 
-    def name(self):
-        return "Aleph Null"
-
-    def image(self):
-        return "icons/AlephNullIcon.png"
+    def setup(self):
+        self.name = "Aleph Null"
+        self.image = "icons/AlephNullIcon.png"
 
     def opening(self, board):
         fen = str(board.fen().split(" ")[0])
@@ -380,6 +380,8 @@ class Bot(ChessBotBase.Bot):
         op_material += len(self.op_bishops) * mod_list(BISHOP)
         op_material += len(self.op_rooks) * mod_list(ROOK)
         op_material += len(self.op_queens) * mod_list(QUEEN)
+
+        simplify_mod = (op_material + EPSILON)/(material + EPSILON)
         
         ################### DEVELOPMENT ###################
         
@@ -461,9 +463,6 @@ class Bot(ChessBotBase.Bot):
             for square in board.pieces(piece_type, not self.color):
                 op_pst_score += pst_lookup(table, square, not self.color)
 
-        score += pst_score * mod_list(PST_MOD)
-        score -= op_pst_score * mod_list(PST_MOD)
-
         ################### EVALUATION ###################
 
         #score += castle_k_score * mod_list(KINGSIDE_CASTLE_MOD)
@@ -477,7 +476,7 @@ class Bot(ChessBotBase.Bot):
 
         score += material * mod_list(MATERIAL_MOD)
         score += op_material * mod_list(OP_MATERIAL_MOD)
-        score -= len(self.total_pieces) * mod_list(SIMPLIFICATION_MOD)
+        score -= simplify_mod * mod_list(SIMPLIFICATION_MOD)
 
         score += development * mod_list(DEVELOP_MOD)
         score += op_development * mod_list(OP_DEVELOP_MOD)
@@ -493,9 +492,9 @@ class Bot(ChessBotBase.Bot):
 
 
         if board.turn == self.color:
-            score *= mod_list(TEMPO_MOD)
+            score += abs(score * (mod_list(TEMPO_MOD)-1))
         else:
-            score /= mod_list(TEMPO_MOD)
+            score -= abs(score * (mod_list(TEMPO_MOD)-1))
 
         
         if board.is_game_over() and not board.is_checkmate():

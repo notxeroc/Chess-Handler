@@ -114,5 +114,5 @@ class Bot(BaseBot.Bot):
                 return m
         return None   # use normal search
 
-    def name(self):
-        return f"Your Chess Bot (depth {self.depth})"
+    def setup(self):
+        self.name = "Cheeburber"

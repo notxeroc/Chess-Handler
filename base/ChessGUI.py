@@ -3,6 +3,7 @@ from tkinter import simpledialog
 from PIL import Image, ImageDraw, ImageTk
 import chess
 import chess.pgn
+import chess.polyglot
 import math
 import threading
 import base64
@@ -68,6 +69,8 @@ class PromotionDialog(tk.Toplevel):
 
 class chessGUI:
     def __init__(self, white_player='human', black_player=None):
+        self.debug = False
+        self.debug_stats = {chess.WHITE : {},chess.BLACK : {}}
         self.piece_set = "classic"
 
         self.move_time = 100
@@ -127,10 +130,10 @@ class chessGUI:
         try: blackbot_image = black_player.IMAGE_DATA
         except: pass
 
-        try: self.white_eval_clamp = white_player.max_eval()
+        try: self.white_eval_clamp = white_player.max_eval
         except: self.white_eval_clamp = 10
         
-        try: self.black_eval_clamp = black_player.max_eval()
+        try: self.black_eval_clamp = black_player.max_eval
         except: self.white_eval_clamp = 10
         
         # White side
@@ -198,6 +201,23 @@ class chessGUI:
         self.white_eval_bot = white_eval_bot
         self.black_eval_bot = black_eval_bot
 
+    def add_debug_stat(self, attribute, name):
+        try: white_value = getattr(self.white_player, attribute)
+        except: white_value = None
+        try: black_value = getattr(self.black_player, attribute)
+        except: black_value = None
+
+        try: self.debug_stats[chess.WHITE][name] = white_value
+        except: self.debug_stats[chess.WHITE][name] = None
+        
+        try: self.debug_stats[chess.BLACK][name] = black_value
+        except: self.debug_stats[chess.BLACK][name] = None
+
+    def get_debug_stats(self, name):
+        w = self.debug_stats[chess.WHITE].get(name, None)
+        b = self.debug_stats[chess.BLACK].get(name, None)
+        return w, b
+
     def update_evaluation(self, white_eval, black_eval):
         try: wname = self.white_player.true_name()
         except: wname = "Player"
@@ -207,9 +227,28 @@ class chessGUI:
         def fmt(e):
             return f"{e:+.1f}" if not math.isnan(e) else "—"
 
-        self.white_eval.config(text=f"White ({wname}): {fmt(white_eval)}")
-        self.black_eval.config(text=f"Black ({bname}): {fmt(black_eval)}")
+        self.add_debug_stat("moves_checked", "moves")
+        
+
+        wtext = f"White ({wname}): {fmt(white_eval)}"
+        btext = f"Black ({bname}): {fmt(black_eval)}"
+
+        if self.debug == False:
+            self.white_eval.config(text=f"{wtext}")
+            self.black_eval.config(text=f"{btext}")
+
+        wdebug = self.format_debug_string(chess.WHITE)
+        bdebug = self.format_debug_string(chess.BLACK)
+
+        self.white_eval.config(text=f"{wtext}\n{wdebug}")
+        self.black_eval.config(text=f"{btext}\n{bdebug}")
+        
         self._draw_eval_bar(white_eval)
+
+    def format_debug_string(self, color):
+        stats = self.debug_stats[color]
+        parts = [f"{k}: {v}" for k, v in stats.items() if v is not None]
+        return ", ".join(parts) if parts else "No stats"
 
     def _draw_eval_bar(self, white_eval):
         self.eval_bar_canvas.delete("all")
@@ -260,7 +299,9 @@ class chessGUI:
             "q": f"{self.piece_set}/black-queen",
             "k": f"{self.piece_set}/black-king",
         }
-        size = float(self.get_psdat_line(0))
+        size = float(self.get_psdat_data("size"))
+        if size == None: 
+            raise NameError(".psdat file is missing a size!")
         for symbol, name in piece_map.items():
             img = Image.open(f"pieces/{name}.png").convert("RGBA")
             new_w = int(img.width * size)
@@ -513,9 +554,32 @@ class chessGUI:
                 if hasattr(player, 'update_castling_status'):
                     player.update_castling_status(move, board_before)
 
+    def get_psdat_data(self, get):
+        index = 0
+        while True:
+            try: line = self.get_psdat_line(index)
+            except EOFError: line = None
+
+            if line == None:
+                return None
+
+            if len(line) < 2:
+                raise NameError(f"name of {get} attribute in */{self.piece_set}.psdat is incorrect (did you forget a comma?)")
+
+            dataType = line[0]
+            dataValue = line[1]
+
+            if dataType == get:
+                return dataValue
+
     def get_psdat_line(self, line):
         with open(f"pieces/{self.piece_set}/{self.piece_set}.psdat", "r") as file:
-            return file.readlines()[line]
+            return file.readlines()[line].split(": ")
 
     def run(self):
+        self.debug = False
+        self.root.mainloop()
+        
+    def run_debug(self):
+        self.debug = True
         self.root.mainloop()

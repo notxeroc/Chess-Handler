@@ -2,8 +2,8 @@ from base.ChessBotBase import Bot
 import chess
 
 class Bot(Bot):
-    def name(self):
-        return "Stalemate Bot"
+    def setup(self):
+        self.name = "Stalemate Bot"
 
     def evaluate(self, board):
         if board.is_stalemate():
