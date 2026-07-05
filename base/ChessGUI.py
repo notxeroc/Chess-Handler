@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw, ImageTk
 import chess
 import chess.pgn
 import math
-from playsound import playsound
+from playsound3 import playsound
 import threading
 import base64
 from io import BytesIO
