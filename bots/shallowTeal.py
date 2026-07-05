@@ -6,8 +6,8 @@ from base.ChessBotBase import Bot
 pawn_val, knight_val, bishop_val, rook_val, queen_val = 10, 30, 35, 55, 100 # starts at 421
 
 class Bot(Bot):
-    def name(self):
-        return "Shallow Teal"
+    def setup(self):
+        self.name = "Shallow Teal"
     
     def getPieceValue(self, piece):
 

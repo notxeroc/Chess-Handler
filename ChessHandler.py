@@ -15,13 +15,14 @@ import bots.ThreeCheckBot as ThreeCheck
 PLAYER = "human"
 
 white_bot = ShallowTeal.Bot(color = chess.WHITE, depth=3, qsearch=False)
-black_bot = AlephNull.Bot(color = chess.BLACK, depth=2, qsearch=True)
+black_bot = AlephNull.Bot(color = chess.BLACK, depth=3, qsearch=False)
 
 gui = chessGUI(white_player=white_bot, black_player=black_bot)
 
 gui.piece_set = "classic"
 gui.move_time = 100
 
+gui.load_images()
 # gui.special["variant"] = "3check"
 # gui.load_variant()
 
@@ -29,7 +30,7 @@ gui.move_time = 100
 gui.run()
 
 pgn = chess.pgn.Game.from_board(gui.board)
-pgn.headers["White"] = "Player" if white_bot == "human" else white_bot.true_name()
+pgn.headers["White"] = " Player" if white_bot == "human" else white_bot.true_name()
 pgn.headers["Black"] = "Player" if black_bot == "human" else black_bot.true_name()
 
 print(pgn)

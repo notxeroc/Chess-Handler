@@ -2,11 +2,9 @@ from base.ChessBotBase import Bot as BotBase
 import chess
 
 class Bot(BotBase):
-    def name(self):
-        return "Kamikaze Gambiter Bot"
-    
-    def image(self):
-        return "icons/KamikazeGambiterBotIcon.png"
+    def setup(self):
+        self.name =  "Kamikaze Gambiter Bot"
+        self.image = "icons/KamikazeGambiterBotIcon.png"
 
     def evaluate(self, board):
         """

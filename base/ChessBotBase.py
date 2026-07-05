@@ -3,18 +3,22 @@ import chess
 import chess.polyglot
 import random
 import math
-from concurrent.futures import ThreadPoolExecutor
 import base64
 from pathlib import Path
 
 PIECE_VALUE = {
-    chess.PAWN: 1,
-    chess.KNIGHT: 3,
-    chess.BISHOP: 3,
-    chess.ROOK: 5,
-    chess.QUEEN: 9,
-    chess.KING: 0
+    chess.PAWN: 100,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+    chess.KING: 0,
 }
+
+EXACT = 0
+LOWER_BOUND = 1
+UPPER_BOUND = -1
+
 
 def mvv_lva_score(board, move):
     if not board.is_capture(move):
@@ -35,16 +39,29 @@ class Bot:
         self.depth = depth
         self.qsearch = qsearch
         self.qdepth = qdepth
-        self.IMAGE_DATA = self.to_image_data(self.image())
-
         self.turn = 0
         self.transposition_table = {}
         self.past_moves_hash = {}
         self.has_castled = None
         self.op_has_castled = None
-
+        
+        self.moves_checked = 0
+        self.pos_scores = {}
+        
         self.op_checks = 0
         self.self_checks = 0
+
+        self.main_setup()
+        self.IMAGE_DATA = self.to_image_data(self.image)
+
+    def main_setup(self):
+        self.image = "base/ChessBotBaseIcon.png"
+        self.name = "Chess Bot"
+        self.max_eval = 10
+        self.setup()
+
+    def setup(self):
+        pass
 
     def get_checks(self, board):
         temp_board = chess.Board()
@@ -82,12 +99,9 @@ class Bot:
 
         # prepend the standard base64 header for PNG
         return f"data:image/png;base64,{encoded_str}"
-
-    def name(self):
-        return f"Chess Bot"
     
     def true_name(self):
-        return self.name() + f" (depth {self.depth}, qsearch {self.qdepth if self.qsearch else "None"})"
+        return self.name + f" (depth {self.depth}, qsearch {self.qdepth if self.qsearch else "None"})"
 
     def evaluate(self, board):
         raise NotImplementedError
@@ -95,17 +109,37 @@ class Bot:
     def opening(self, board):
         return None
 
-    def all_moves(self, board):
+    def _move_ordering_key(self, board, move, tt_move=None):
+        if move == tt_move:
+            return 1_000_000
+
+        if board.is_capture(move):
+            victim = board.piece_at(move.to_square)
+            attacker = board.piece_at(move.from_square)
+            victim_value = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
+            attacker_value = PIECE_VALUE.get(attacker.piece_type, 0) if attacker else 0
+            return 1_000_000 + victim_value - attacker_value
+
+        if move.promotion is not None:
+            promotion_value = PIECE_VALUE.get(move.promotion, 0)
+            return 900_000 + promotion_value
+
+        if board.gives_check(move):
+            return 800_000
+
+        return 0
+
+    def all_moves(self, board, tt_move=None):
         moves = list(board.legal_moves)
         moves.sort(
-            key=lambda m: mvv_lva_score(board, m),
-            reverse=True
+            key=lambda m: self._move_ordering_key(board, m, tt_move=tt_move),
+            reverse=True,
         )
         return moves
 
-    def quiescence(self, board, depth, alpha, beta):
-        stand_pat = self.main_eval(board)  # now correctly perspective-relative
-        
+    def quiescence(self, board: chess.Board, depth, alpha, beta):
+        stand_pat = self.main_eval(board)
+
         if stand_pat >= beta:
             return beta
         alpha = max(alpha, stand_pat)
@@ -113,9 +147,12 @@ class Bot:
         if depth == 0 or board.is_game_over():
             return alpha
 
-        for move in self.all_moves(board):
-            if not board.is_capture(move) and not board.gives_check(move):
-                continue
+        if board.is_check():
+            moves = self.all_moves(board)
+        else:
+            moves = [move for move in self.all_moves(board) if board.is_capture(move) or move.promotion is not None or board.gives_check(move)]
+
+        for move in moves:
             board.push(move)
             score = -self.quiescence(board, depth - 1, -beta, -alpha)
             board.pop()
@@ -128,37 +165,59 @@ class Bot:
     def main_eval(self, board):
         self.get_checks(board)
         score = self.evaluate(board)
+        self.moves_checked += 1
         return score if board.turn == self.color else -score
 
-    def minimax(self, board, depth, alpha, beta):
+    def minimax(self, board, depth, alpha, beta, tt_move=None):
         h = chess.polyglot.zobrist_hash(board)
 
-        # Only use cached result if it was searched at least as deep
-        if h in self.transposition_table:
-            cached_score, cached_depth = self.transposition_table[h]
+        entry = self.transposition_table.get(h)
+        if entry is not None:
+            cached_depth, cached_score, cached_flag, cached_move = entry
             if cached_depth >= depth:
-                return cached_score
+                if cached_flag == EXACT:
+                    return cached_score
+                if cached_flag == LOWER_BOUND and cached_score >= beta:
+                    return cached_score
+                if cached_flag == UPPER_BOUND and cached_score <= alpha:
+                    return cached_score
 
         if depth == 0 or board.is_game_over():
             if self.qsearch:
                 return self.quiescence(board, self.qdepth, alpha, beta)
             return self.main_eval(board)
 
+        alpha_orig = alpha
+        beta_orig = beta
         value = -1e9
-        for move in self.all_moves(board):
+        best_move = None
+
+        for move in self.all_moves(board, tt_move=tt_move):
             board.push(move)
-            value = max(value, -self.minimax(board, depth - 1, -beta, -alpha))
+            score = -self.minimax(board, depth - 1, -beta, -alpha, tt_move=tt_move)
             board.pop()
+
+            if score > value:
+                value = score
+                best_move = move
+
             alpha = max(alpha, value)
             if alpha >= beta:
                 break
 
-        # Cache with depth so shallow results don't override deep ones
-        self.transposition_table[h] = (value, depth)
+        if value <= alpha_orig:
+            flag = UPPER_BOUND
+        elif value >= beta_orig:
+            flag = LOWER_BOUND
+        else:
+            flag = EXACT
+
+        self.transposition_table[h] = (depth, value, flag, best_move)
         return value
 
     def choose_move(self, board: chess.Board, depth=None, remaining_time=None):
-        last_board = board.copy()
+        self.pos_scores = {}
+        self.moves_checked = 0
         move = self.opening(board)
         if move is not None and move in board.legal_moves:
             self.turn += 1
@@ -189,23 +248,14 @@ class Bot:
                 depth = max(1, depth - 1)
 
         moves = self.all_moves(board)
+        scored_moves = []
 
-        if depth > 1:
-            def eval_move(move):
-                board_copy = board.copy()
-                board_copy.push(move)
-                score = -self.minimax(board_copy, depth - 1, -1e9, 1e9)
-                return score, move
-
-            with ThreadPoolExecutor() as executor:
-                scored_moves = list(executor.map(eval_move, moves))
-        else:
-            scored_moves = []
-            for move in moves:
-                board.push(move)
-                score = -self.minimax(board, depth - 1, -1e9, 1e9)
-                board.pop()
-                scored_moves.append((score, move))
+        for move in moves:
+            board.push(move)
+            score = -self.minimax(board, depth - 1, -1e9, 1e9, tt_move=move)
+            self.pos_scores[chess.polyglot.zobrist_hash(board)] = score
+            board.pop()
+            scored_moves.append((score, move))
 
         if not scored_moves:
             return None

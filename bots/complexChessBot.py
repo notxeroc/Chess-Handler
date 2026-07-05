@@ -4,8 +4,8 @@ import base.ChessBotBase as ChessBotBase
 import math
 
 class Bot(ChessBotBase.Bot):
-    def name(self):
-        return "Complex Chess Bot"
+    def setup(self):
+        self.name = "Complex Chess Bot"
 
     def opening(self, board):
         fen = str(board.fen().split(" ")[0])
